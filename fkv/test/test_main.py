@@ -1,8 +1,14 @@
 import parsy as p
 import pytest
 
-from fkv.parser import quoted, json_key, number, json_kv
+from fkv.parser import quoted, json_key, number, json_kv, json_list
 
+MULTILINE_LIST = """[
+    "item1",
+    "item2",
+    "item3",
+    1, 2, 3
+]"""
 
 def test_number():
     assert number.parse("14") == 14
@@ -45,3 +51,23 @@ def test_json_kv_matches():
 
     v = json_kv.parse('"key": 7.998')
     assert v == ("key", 7.998)
+
+
+def test_json_list():
+    assert json_list.parse("[]") == []
+    assert json_list.parse("[1, 2]") == [1, 2]
+    assert json_list.parse('[1, "2", 3]') == [1, "2", 3]
+    assert json_list.parse('[1,\n2,\n3]') == [1, 2, 3]
+    assert json_list.parse(MULTILINE_LIST) == ["item1", "item2", "item3", 1, 2, 3]
+
+    NESTED_LIST = """[
+        [], [], [], [1, 2, 3, 4, "5"],
+        [],
+        [[]],
+        [[],[],[],[[],["hello", "world"],[],[1]]]
+    ]"""
+
+    assert json_list.parse(NESTED_LIST) == [
+        [], [], [],
+        [1, 2, 3, 4, '5'],
+        [], [[]], [[], [], [], [[], ['hello', 'world'], [], [1]]]]

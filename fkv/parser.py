@@ -33,11 +33,6 @@ def json_key():
 
 
 @p.generate
-def json_list():
-    ...
-
-
-@p.generate
 def json_value():
     yield p.whitespace.optional()
     c = yield value_check
@@ -52,6 +47,26 @@ def json_value():
     yield p.whitespace.optional()
 
     return v
+
+
+@p.generate
+def json_list():
+    lst = []
+    yield p.string('[')
+    while True:
+        yield p.whitespace.optional()
+        i = yield json_value.optional()
+        yield p.string(',').optional()
+        yield p.whitespace.optional()
+        if i is not None:
+            lst.append(i)
+        else:
+            yield p.string(']')
+            yield p.string(',').optional()
+            break
+    return lst
+
+
 
 
 @p.generate
