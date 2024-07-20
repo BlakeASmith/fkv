@@ -1,7 +1,8 @@
 jobs:
-  on: push
-  branches:
-    - 'main'
+  on:
+    push:
+      branches:
+        - 'main'
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
