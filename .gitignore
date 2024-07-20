@@ -1,3 +1,5 @@
 .idea
 poetry.lock
 dist
+fkv/__pycache__
+fkv/test/__pycache__
