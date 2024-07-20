@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - master
+      - main
 jobs:
   pypi-publish:
     name: Upload release to PyPI
