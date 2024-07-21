@@ -3,3 +3,4 @@ poetry.lock
 dist
 fkv/__pycache__
 fkv/test/__pycache__
+fkv/parsers/__pycache__

@@ -1,63 +1,80 @@
 
-from typing import BinaryIO, override 
+from io import BytesIO, IOBase, TextIOBase
+from typing import override, Any
 from collections.abc import Iterator
 from collections import deque
 
 
-class ByteStream(Iterator[str]):
-    def __init__(self, io: BinaryIO, chunk_size: int = 1024, max_lookbehind: int = 10) -> None:
-        self._io = io
-        self._chunk_size = chunk_size
-        self._chunk = b""
-        self._chunk_iter = iter(self._chunk)
+class LookaheadIterator[T](Iterator[T]):
+    def __init__(self, _iter: Iterator[T], max_lookbehind: int = 10):
         self._offset = 0
-        self.__stop = False
-        self.__ahead = deque[int]()
-        self.__behind: list[int] = []
+        self._iter = _iter
+        self.__ahead = deque[T]()
+        self.__behind: list[T] = []
         self.__max_lookbehind = max_lookbehind
 
-
-    def __read_chunk(self):
-        self._chunk = self._io.read(self._chunk_size)
-        self._chunk_iter = iter(self._chunk)
-        self._offset = self._io.tell() #TODO: allow setting the intial offset
-        if not self._chunk:
-            self.__stop = True
+    @property
+    def offset(self):
+        return self._offset
 
     @override
-    def __iter__(self):
-        return self
-
-
-    def lookahead(self, n: int = 1) -> str:
-        _peek = [self.__next() for _ in range(n)]
-        for _c in _peek:
-            self.__ahead.appendleft(_c)
-        return ''.join(chr(_c) for _c in _peek)
-
-    def lookbehind(self, n: int = 1) -> str:
-        if n > self.__max_lookbehind:
-            raise ValueError("Cannot look behind passed buffer size")
-        v = ''.join(chr(_c) for _c in self.__behind[-n:])
-        return v
-
-    @override
-    def __next__(self) -> str:
+    def __next__(self) -> T:
         self._offset += 1
-        return chr(self.__next())
+        return self.__next()
 
-    def __next(self) -> int:
+
+    def __next(self) -> T:
         if self.__ahead:
             return self.__ahead.pop()
+        _next = next(self._iter)
+        self.__behind.append(_next)
+        if len(self.__behind) > self.__max_lookbehind:
+            _ = self.__behind.pop()
+        return _next
 
+    def lookahead(self, n: int = 1) -> list[T]:
+        _peek: list[T] = []
+        for _ in range(n):
+            try:
+                _peek.append(self.__next())
+            except StopIteration:
+                break
+        for _c in _peek:
+            self.__ahead.appendleft(_c)
+        return _peek
+
+    def lookbehind(self, n: int = 1) -> list[T]:
+        if n > self.__max_lookbehind:
+            raise ValueError("Cannot look behind passed buffer size")
+        v = self.__behind[-n:]
+        return v
+
+
+class ChunkedIOIterator[T](Iterator[T]):
+    def __init__(self, io: IOBase, chunk_size: int = 1024):
+        self._io = io
+        self._chunk_size = chunk_size
+        self._chunk: Iterator[Any] = self._io.read(self._chunk_size)
+        self._iter: Iterator[T] = iter(self._chunk)
+
+    @override
+    def __next__(self) -> T:
         try:
-            _next = next(self._chunk_iter)
-            self.__behind.append(_next)
-            if len(self.__behind) > self.__max_lookbehind:
-                _ = self.__behind.pop()
-            return _next
+            return next(self._iter)
         except StopIteration as ex:
-            self.__read_chunk()
-            if self.__stop:
+            self._chunk = self._io.read(self._chunk_size)
+            self._iter = iter(self._chunk)
+
+            if not self._chunk:
                 raise ex
-            return self.__next()
+
+            return next(self)
+
+
+def textstream(text: TextIOBase, chunk_size: int = 1024) -> LookaheadIterator[str]:
+    io_iterator = ChunkedIOIterator[str](text, chunk_size) 
+    return LookaheadIterator(io_iterator)
+
+def bytestream(binary: BytesIO, chunk_size: int = 1024) -> LookaheadIterator[str]:
+    io_iterator = ChunkedIOIterator[int](binary, chunk_size) 
+    return LookaheadIterator[str](chr(_c) for _c in io_iterator)
