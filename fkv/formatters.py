@@ -27,15 +27,17 @@ def format_text(results: List[Dict[str, Any]], args) -> str:
             parts.append(f"{result['file']}:")
         
         # Add key
-        parts.append(result['key'])
+        key_part = result['key']
         
-        # Add value if requested and available
-        if args.show_values and result.get('value') is not None:
+        # Add value by default (unless keys-only is specified)
+        if not args.keys_only and result.get('value') is not None:
             value_str = _format_value(result['value'])
-            parts.append(f"= {value_str}")
+            key_part = f"{key_part} = {value_str}"
         
-        # Add offset if available (for stream parsing)
-        if result.get('offset') is not None:
+        parts.append(key_part)
+        
+        # Add offset if available (for stream parsing) and verbose mode
+        if args.verbose and result.get('offset') is not None:
             parts.append(f"(offset: {result['offset']})")
         
         lines.append(' '.join(parts))
@@ -77,7 +79,8 @@ def format_csv(results: List[Dict[str, Any]], args) -> str:
     # Determine columns based on available data
     columns = ['key']
     
-    if any(r.get('value') is not None for r in results):
+    # Show values by default unless keys-only is specified
+    if not args.keys_only and any(r.get('value') is not None for r in results):
         columns.append('value')
     
     if args.show_files or any(r.get('file') for r in results):
@@ -86,7 +89,7 @@ def format_csv(results: List[Dict[str, Any]], args) -> str:
     if any(r.get('format') for r in results):
         columns.append('format')
     
-    if any(r.get('offset') is not None for r in results):
+    if args.verbose and any(r.get('offset') is not None for r in results):
         columns.append('offset')
     
     writer = csv.DictWriter(output, fieldnames=columns)

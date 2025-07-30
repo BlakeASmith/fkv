@@ -26,7 +26,7 @@ def find_keys_in_stream(stream, search_pattern: Optional[str] = None,
 
 def find_keys_in_text(text: str, file_format: Optional[str] = None,
                      search_pattern: Optional[str] = None,
-                     case_sensitive: bool = True) -> List[Dict[str, Any]]:
+                     case_sensitive: bool = True, exact_match: bool = False) -> List[Dict[str, Any]]:
     """Extract keys from text content with format-specific parsing."""
     results = []
     
@@ -38,7 +38,7 @@ def find_keys_in_text(text: str, file_format: Optional[str] = None,
     if parser and file_format != 'auto':
         try:
             parsed_data = parser(text)
-            keys_found = extract_keys_from_data(parsed_data, search_pattern, case_sensitive)
+            keys_found = extract_keys_from_data(parsed_data, search_pattern, case_sensitive, exact_match)
             for key, value in keys_found:
                 results.append({
                     'key': key,
@@ -68,7 +68,7 @@ def find_keys_in_text(text: str, file_format: Optional[str] = None,
 
 
 def extract_keys_from_data(data: Any, search_pattern: Optional[str] = None,
-                          case_sensitive: bool = True, prefix: str = "") -> List[Tuple[str, Any]]:
+                          case_sensitive: bool = True, exact_match: bool = False, prefix: str = "") -> List[Tuple[str, Any]]:
     """Recursively extract keys from parsed data structures."""
     results = []
     
@@ -77,29 +77,32 @@ def extract_keys_from_data(data: Any, search_pattern: Optional[str] = None,
             full_key = f"{prefix}.{key}" if prefix else key
             
             # Check if key matches pattern
-            if not search_pattern or matches_pattern(full_key, search_pattern, case_sensitive):
+            if not search_pattern or matches_pattern(full_key, search_pattern, case_sensitive, exact_match):
                 results.append((full_key, value))
             
             # Recursively process nested structures
             if isinstance(value, (dict, list)):
-                results.extend(extract_keys_from_data(value, search_pattern, case_sensitive, full_key))
+                results.extend(extract_keys_from_data(value, search_pattern, case_sensitive, exact_match, full_key))
     
     elif isinstance(data, list):
         for i, item in enumerate(data):
             if isinstance(item, (dict, list)):
                 item_prefix = f"{prefix}[{i}]"
-                results.extend(extract_keys_from_data(item, search_pattern, case_sensitive, item_prefix))
+                results.extend(extract_keys_from_data(item, search_pattern, case_sensitive, exact_match, item_prefix))
     
     return results
 
 
-def matches_pattern(text: str, pattern: str, case_sensitive: bool = True) -> bool:
+def matches_pattern(text: str, pattern: str, case_sensitive: bool = True, exact_match: bool = False) -> bool:
     """Check if text matches the given pattern."""
     if not pattern:
         return True
     
     pattern_text = pattern if case_sensitive else pattern.lower()
     text_to_check = text if case_sensitive else text.lower()
+    
+    if exact_match:
+        return text_to_check == pattern_text
     
     try:
         return bool(re.search(pattern_text, text_to_check))
@@ -115,7 +118,7 @@ def process_file(file_path: Path, args) -> List[Dict[str, Any]]:
             content = f.read()
         
         file_format = args.format or detect_format(content, file_path.suffix)
-        results = find_keys_in_text(content, file_format, args.pattern, args.case_sensitive)
+        results = find_keys_in_text(content, file_format, args.pattern, args.case_sensitive, args.exact_match)
         
         # Add file path to results
         for result in results:
@@ -149,7 +152,7 @@ def process_input(args) -> List[Dict[str, Any]]:
     else:
         # Read from stdin
         content = sys.stdin.read()
-        results = find_keys_in_text(content, args.format, args.pattern, args.case_sensitive)
+        results = find_keys_in_text(content, args.format, args.pattern, args.case_sensitive, args.exact_match)
         for result in results:
             result['file'] = '<stdin>'
     
@@ -160,17 +163,20 @@ def main():
     parser = argparse.ArgumentParser(
         description='Find key-value pairs in various file formats',
         epilog='''Examples:
-  fkv file.json                          # Extract all keys from JSON file
-  fkv -p "api.*" file.yaml              # Find keys matching pattern
-  fkv -f json -o csv data.txt           # Force JSON format, output as CSV
-  cat config.ini | fkv                  # Read from stdin
-  fkv -r directory/                     # Recursively process directory
+  fkv -k api_key config.json            # Find specific key and its value
+  fkv -k "database.host" file.yaml      # Find nested key value
+  fkv -p "api.*" file.json              # Find all keys matching pattern
+  fkv --exact-match -k database config  # Exact key match (no regex)
+  fkv -k password -r /etc/              # Search for key recursively
+  cat config.json | fkv -k api_key      # Search from stdin
+  fkv --keys-only file.json             # Show only keys (no values)
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
     parser.add_argument('files', nargs='*', help='Files to process (default: stdin)')
-    parser.add_argument('-p', '--pattern', help='Regex pattern to match keys')
+    parser.add_argument('-k', '--key', help='Specific key to search for (exact match or regex pattern)')
+    parser.add_argument('-p', '--pattern', help='Regex pattern to match keys (alias for --key)')
     parser.add_argument('-f', '--format', 
                        choices=['json', 'yaml', 'ini', 'toml', 'xml', 'properties', 'auto'],
                        default='auto', help='Force specific input format')
@@ -183,18 +189,31 @@ def main():
                        help='Recursively process directories')
     parser.add_argument('-v', '--verbose', action='store_true',
                        help='Verbose output')
-    parser.add_argument('--show-values', action='store_true',
-                       help='Show values in addition to keys')
+    parser.add_argument('--keys-only', action='store_true',
+                       help='Show only keys (no values)')
     parser.add_argument('--show-files', action='store_true',
                        help='Show file names in output')
+    parser.add_argument('--exact-match', action='store_true',
+                       help='Exact key match instead of regex pattern')
     
     args = parser.parse_args()
+    
+    # Handle the key/pattern argument unification
+    if args.key:
+        args.pattern = args.key
+    elif not args.pattern and len(args.files) == 0:
+        # If no key is specified and reading from stdin, show all keys
+        pass
     
     try:
         results = process_input(args)
         
         if not results:
             if args.verbose:
+                print("No matching keys found", file=sys.stderr)
+            elif args.pattern:
+                print(f"No keys matching pattern '{args.pattern}' found", file=sys.stderr)
+            else:
                 print("No keys found", file=sys.stderr)
             sys.exit(1)
         

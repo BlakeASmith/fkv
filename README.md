@@ -1,14 +1,15 @@
 # fkv - Find Key-Value pairs
 
-A powerful command-line tool for extracting and searching key-value pairs across multiple file formats. The `fkv` tool intelligently detects file formats and extracts keys using both format-specific parsers and stream-based pattern matching.
+A powerful command-line tool for finding specific keys and their values across multiple file formats. The `fkv` tool is designed to quickly locate configuration values, API keys, passwords, and other key-value pairs in your configuration files.
 
 ## Features
 
+- 🔑 **Key-focused search**: Find specific keys and their values quickly
+- 🎯 **Pattern matching**: Search for keys using regex patterns or exact matches
 - 🔍 **Multi-format support**: JSON, YAML, INI, TOML, XML, Properties, and more
 - 🧠 **Smart format detection**: Automatically detects file formats based on content and extension
-- 🎯 **Pattern matching**: Search for keys using regex patterns
-- 📁 **Directory processing**: Process single files, directories, or recursive directory trees
-- 📤 **Multiple output formats**: Plain text, JSON, or CSV output
+- 📁 **Directory processing**: Search across multiple files and directories recursively
+- 📤 **Multiple output formats**: Plain text, JSON, or CSV output with values shown by default
 - 🔧 **Flexible parsing**: Stream-based parsing for any key-value pattern
 - ⚡ **Fast and efficient**: Built for performance with large files and directories
 
@@ -29,24 +30,26 @@ pip install parsy PyYAML
 ## Quick Start
 
 ```bash
-# Extract all keys from a JSON file
-fkv config.json
+# Find a specific key and its value
+fkv -k api_key config.json
 
-# Find keys matching a pattern
-fkv -p "api.*" config.json --show-values
+# Find nested key values
+fkv -k "database.password" config.json
 
-# Process multiple file formats
-fkv config.json settings.yaml app.ini
+# Find all keys matching a pattern
+fkv -p "api.*" config.json
 
-# Recursive directory search
-fkv -r /path/to/configs --show-files
+# Search recursively through directories
+fkv -k password -r /etc/configs/
+
+# Exact key match (no regex)
+fkv --exact-match -k database config.json
 
 # Read from stdin
-cat config.json | fkv --show-values
+cat config.json | fkv -k api_key
 
-# Output as JSON or CSV
-fkv config.json -o json
-fkv config.json -o csv --show-values
+# Show only keys (no values)
+fkv --keys-only config.json
 ```
 
 ## Usage
@@ -58,14 +61,16 @@ Arguments:
   FILES                 Files to process (default: stdin)
 
 Options:
-  -p, --pattern TEXT    Regex pattern to match keys
+  -k, --key KEY         Specific key to search for (exact match or regex pattern)
+  -p, --pattern TEXT    Regex pattern to match keys (alias for --key)
   -f, --format          Force specific input format (json|yaml|ini|toml|xml|properties|auto)
   -o, --output          Output format (text|json|csv)
   -c, --case-sensitive  Case-sensitive pattern matching
   -r, --recursive       Recursively process directories
   -v, --verbose         Verbose output
-  --show-values         Show values in addition to keys
+  --keys-only           Show only keys (no values)
   --show-files          Show file names in output
+  --exact-match         Exact key match instead of regex pattern
   -h, --help           Show help message
 ```
 
@@ -84,10 +89,10 @@ Options:
 
 **Output:**
 ```
-api_key
-database
-database.host
-database.port
+api_key = secret123
+database = {"host":"localhost","port":5432}
+database.host = localhost
+database.port = 5432
 ```
 
 ### YAML
@@ -103,13 +108,13 @@ servers:
 
 **Output:**
 ```
-api_key
-database
-database.host
-database.port
-servers
-servers[0].name
-servers[0].url
+api_key = secret123
+database = {"host":"localhost","port":5432}
+database.host = localhost
+database.port = 5432
+servers = [{"name":"web1","url":"https://web1.example.com"}]
+servers[0].name = web1
+servers[0].url = https://web1.example.com
 ```
 
 ### INI Files
@@ -178,27 +183,33 @@ config.api.version
 ### Basic Usage
 
 ```bash
-# Extract all keys from a file
+# Find a specific key
+fkv -k api_key config.json
+
+# Find nested keys
+fkv -k "database.host" config.json
+
+# Show all keys and values
 fkv config.json
 
-# Show both keys and values
-fkv config.json --show-values
-
-# Show file names (useful when processing multiple files)
-fkv *.json --show-files
+# Show only keys (no values)
+fkv --keys-only config.json
 ```
 
 ### Pattern Matching
 
 ```bash
-# Find all API-related keys
-fkv config.json -p "api.*"
+# Find all API-related keys and values
+fkv -p "api.*" config.json
 
 # Find all database configuration keys
-fkv config.json -p ".*database.*" --show-values
+fkv -p ".*database.*" config.json
 
 # Case-insensitive search
-fkv config.json -p "API.*" --case-sensitive
+fkv -p "API.*" config.json
+
+# Exact key match (no regex)
+fkv --exact-match -k database config.json
 ```
 
 ### Directory Processing
@@ -325,6 +336,14 @@ fkv -p "(api|auth|security)\..*\.key"
 This project is open source. See LICENSE file for details.
 
 ## Changelog
+
+### v0.2.0
+- **KEY-FOCUSED REDESIGN**: Tool now focuses on finding specific keys and their values
+- **Values shown by default**: No need for --show-values flag anymore
+- **Enhanced key search**: New -k/--key option for specific key lookup
+- **Exact matching**: --exact-match option for precise key matching (no regex)
+- **Improved UX**: Better error messages and help examples focused on key search
+- **Backwards compatible**: All existing functionality preserved
 
 ### v0.1.3
 - Added comprehensive CLI interface
